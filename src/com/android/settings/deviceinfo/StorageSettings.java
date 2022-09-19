@@ -43,7 +43,6 @@ import android.text.format.Formatter;
 import android.text.format.Formatter.BytesResult;
 import android.util.Log;
 import android.widget.Toast;
-
 import com.android.internal.logging.MetricsProto.MetricsEvent;
 import com.android.settings.R;
 import com.android.settings.SettingsPreferenceFragment;
@@ -52,6 +51,7 @@ import com.android.settings.dashboard.SummaryLoader;
 import com.android.settings.search.BaseSearchIndexProvider;
 import com.android.settings.search.Indexable;
 import com.android.settings.search.SearchIndexableRaw;
+
 import com.android.settingslib.RestrictedLockUtils;
 import com.android.settingslib.deviceinfo.PrivateStorageInfo;
 import com.android.settingslib.deviceinfo.StorageManagerVolumeProvider;
@@ -92,7 +92,6 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
     private PreferenceCategory mExternalCategory;
 
     private StorageSummaryPreference mInternalSummary;
-    private static long sTotalInternalStorage;
 
     @Override
     protected int getMetricsCategory() {
@@ -112,11 +111,6 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
 
         mStorageManager = context.getSystemService(StorageManager.class);
         mStorageManager.registerListener(mStorageListener);
-
-        if (sTotalInternalStorage <= 0) {
-            sTotalInternalStorage = mStorageManager.getPrimaryStorageSize();
-        }
-
         addPreferencesFromResource(R.xml.device_info_storage);
 
         mInternalCategory = (PreferenceCategory) findPreference("storage_internal");
@@ -170,24 +164,17 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
         long primaryPhysicalTotalSpace = PrivateStorageInfo.getPrimaryPhysicalTotalSpace(volumes);
         for (VolumeInfo vol : volumes) {
             if (vol.getType() == VolumeInfo.TYPE_PRIVATE) {
-                final long volumeTotalBytes = PrivateStorageInfo.getTotalSize(vol,
-                        sTotalInternalStorage) - primaryPhysicalTotalSpace;
                 final int color = COLOR_PRIVATE[privateCount++ % COLOR_PRIVATE.length];
                 mInternalCategory.addPreference(
-                        new StorageVolumePreference(context, vol, color, volumeTotalBytes));
+                        new StorageVolumePreference(context, vol, color));
                 if (vol.isMountedReadable()) {
                     final File path = vol.getPath();
-                    privateUsedBytes += (volumeTotalBytes - path.getFreeSpace());
-                    privateTotalBytes += volumeTotalBytes;
+                    privateUsedBytes += path.getTotalSpace() - path.getFreeSpace();
+                    privateTotalBytes += path.getTotalSpace();
                 }
             } else if (vol.getType() == VolumeInfo.TYPE_PUBLIC) {
-                StorageVolumePreference ExStorageVolumePreference =
-                        new StorageVolumePreference(context, vol, COLOR_PUBLIC, 0);
-
-                //Disable preference when in change
-                ExStorageVolumePreference.setEnabled(vol.getState()!= VolumeInfo.STATE_CHECKING
-                    && vol.getState() != VolumeInfo.STATE_EJECTING);
-                mExternalCategory.addPreference(ExStorageVolumePreference);
+                mExternalCategory.addPreference(
+                        new StorageVolumePreference(context, vol, COLOR_PUBLIC));
             }
         }
 
@@ -240,7 +227,6 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
             // Only showing primary internal storage, so just shortcut
             final Bundle args = new Bundle();
             args.putString(VolumeInfo.EXTRA_VOLUME_ID, VolumeInfo.ID_PRIVATE_INTERNAL);
-            PrivateVolumeSettings.setVolumeSize(args, sTotalInternalStorage);
             Intent intent = Utils.onBuildStartFragmentIntent(getActivity(),
                     PrivateVolumeSettings.class.getName(), args, null, R.string.apps_storage, null,
                     false);
@@ -288,8 +274,6 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
                         PrivateStorageInfo.getPrimaryPhysicalTotalSpace(volumes);
                 final Bundle args = new Bundle();
                 args.putString(VolumeInfo.EXTRA_VOLUME_ID, vol.getId());
-                PrivateVolumeSettings.setVolumeSize(args, PrivateStorageInfo.getTotalSize(vol,
-                        sTotalInternalStorage) - primaryPhysicalTotalSpace);
                 startFragment(this, PrivateVolumeSettings.class.getCanonicalName(),
                         -1, 0, args);
                 return true;
@@ -518,13 +502,25 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
 
         private void updateSummary() {
             // TODO: Register listener.
-            final StorageManager storageManager = mContext.getSystemService(StorageManager.class);
-            PrivateStorageInfo info = PrivateStorageInfo.getPrivateStorageInfo(
-                    new StorageManagerVolumeProvider(storageManager));
-            long privateUsedBytes = info.totalBytes - info.freeBytes;
+            StorageManager storageManager = mContext.getSystemService(StorageManager.class);
+            final List<VolumeInfo> volumes = storageManager.getVolumes();
+            long privateUsedBytes = 0;
+            long privateTotalBytes = 0;
+            for (VolumeInfo info : volumes) {
+                if (info.getType() != VolumeInfo.TYPE_PUBLIC
+                        && info.getType() != VolumeInfo.TYPE_PRIVATE) {
+                    continue;
+                }
+                final File path = info.getPath();
+                if (path == null) {
+                    continue;
+                }
+                privateUsedBytes += path.getTotalSpace() - path.getFreeSpace();
+                privateTotalBytes += path.getTotalSpace();
+            }
             mLoader.setSummary(this, mContext.getString(R.string.storage_summary,
                     Formatter.formatFileSize(mContext, privateUsedBytes),
-                    Formatter.formatFileSize(mContext, info.totalBytes)));
+                    Formatter.formatFileSize(mContext, privateTotalBytes)));
         }
     }
 
