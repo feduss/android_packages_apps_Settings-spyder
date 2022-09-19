@@ -215,6 +215,7 @@ public class StorageSettings extends SettingsPreferenceFragment implements Index
                 result.value, result.units));
         mInternalSummary.setSummary(getString(R.string.storage_volume_used_total,
                 Formatter.formatFileSize(context, privateTotalBytes)));
+
         if (mInternalCategory.getPreferenceCount() > 0) {
             getPreferenceScreen().addPreference(mInternalCategory);
         }
