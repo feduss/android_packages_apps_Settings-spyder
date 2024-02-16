@@ -600,6 +600,7 @@ public class PrivateVolumeSettings extends SettingsPreferenceFragment {
             }
         }
         if (otherItem != null) {
+            final File file = mVolume.getPath();
             final long usedSize = file.getTotalSpace() - details.availSize;
             final long unaccountedSize = usedSize - accountedSize;
             final long otherSize = totalMiscSize + totalDownloadsSize + unaccountedSize;
