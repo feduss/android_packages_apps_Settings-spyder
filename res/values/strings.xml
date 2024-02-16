@@ -7970,5 +7970,4 @@
     <!-- Allow fake signature -->
     <string name="allow_signature_fake">Allow signature spoofing</string>
     <string name="allow_signature_fake_summary">Allow apps to bypass security systems by pretending to be a different app.</string>
->>>>>>> f1bdffa290 (Signature spoofing [2/2])
 </resources>
